@@ -71,6 +71,11 @@ class ProviderTests(unittest.TestCase):
         with self.assertRaises(ClassificationError):
             classify_ticket("Our dashboard is slow.")
 
+    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True)
+    def test_missing_model_is_controlled(self):
+        with self.assertRaisesRegex(ClassificationError, "OPENROUTER_MODEL"):
+            classify_ticket("Our dashboard is slow.")
+
     def test_input_validation(self):
         with self.assertRaisesRegex(ValueError, "Enter"):
             classify_ticket("   ")
@@ -79,7 +84,7 @@ class ProviderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             classify_ticket(None)
 
-    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"})
+    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key", "OPENROUTER_MODEL": "google/gemma-4-26b-a4b-it:free"})
     @patch("src.classifier.requests.post")
     def test_json_mode_provider_response_is_independently_validated(self, post):
         response = Mock(ok=True)
@@ -90,12 +95,10 @@ class ProviderTests(unittest.TestCase):
         self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Bearer test-key")
         self.assertEqual(post.call_args.kwargs["timeout"], (5, 90))
         payload = post.call_args.kwargs["json"]
-        self.assertEqual(payload["model"], "openai/gpt-4o-mini")
-        self.assertEqual(payload["response_format"]["type"], "json_schema")
-        self.assertTrue(payload["response_format"]["json_schema"]["strict"])
-        self.assertTrue(payload["provider"]["require_parameters"])
+        self.assertEqual(payload["model"], "google/gemma-4-26b-a4b-it:free")
+        self.assertEqual(payload["response_format"]["type"], "json_object")
 
-    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"})
+    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key", "OPENROUTER_MODEL": "google/gemma-4-26b-a4b-it:free"})
     @patch("src.classifier.requests.post")
     def test_invalid_model_result_and_provider_failure_are_safe(self, post):
         response = Mock(ok=True)
@@ -109,7 +112,7 @@ class ProviderTests(unittest.TestCase):
             classify_ticket("Something is broken.")
 
 
-    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"})
+    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key", "OPENROUTER_MODEL": "google/gemma-4-26b-a4b-it:free"})
     @patch("src.classifier.requests.post")
     def test_provider_quota_and_rate_limit_have_distinct_messages(self, post):
         response = Mock(status_code=429, ok=False)

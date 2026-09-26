@@ -5,7 +5,7 @@ A small support operations workspace that classifies a customer ticket into urge
 ## Features
 
 - Responsive ticket input and scannable classification results.
-- OpenRouter Chat Completions API integration with JSON output mode and independent strict JSON Schema output and independent validation.
+- OpenRouter Chat Completions API integration with JSON output mode and independent JSON output mode and independent schema validation.
 - Independent validation of every model result, including enums, exact fields, confidence range, and the 20-word reasoning limit.
 - Input size checks, user-safe provider errors, loading/error states, and no ticket-content logging.
 - No database, account system, browser-side API keys, or retained ticket history.
@@ -32,10 +32,11 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 $env:OPENROUTER_API_KEY = "your-key"
+$env:OPENROUTER_MODEL = "google/gemma-4-26b-a4b-it:free"
 python -m src.main
 ```
 
-Open <http://127.0.0.1:8000>. On macOS/Linux, activate the environment with `source .venv/bin/activate` and set the key with `export OPENROUTER_API_KEY="your-key"`.
+Open <http://127.0.0.1:8000>. On macOS/Linux, activate the environment with `source .venv/bin/activate` and set the key with `export OPENROUTER_API_KEY="your-key"` and `export OPENROUTER_MODEL="google/gemma-4-26b-a4b-it:free"`.
 
 Copy `.env.example` as a reference for the required settings. The application intentionally does not read `.env` files; provide configuration through the process environment or your deployment secret manager.
 
@@ -44,9 +45,11 @@ Copy `.env.example` as a reference for the required settings. The application in
 | Variable | Required | Default | Purpose |
 |---|---:|---|---|
 | `OPENROUTER_API_KEY` | Yes | — | Server-side provider credential. Never put this in frontend code. |
-| `OPENROUTER_MODEL` | No | `openai/gpt-4o-mini` | Model name accepted by the OpenRouter Chat Completions API. |
+| `OPENROUTER_MODEL` | Yes | `google/gemma-4-26b-a4b-it:free` in `.env.example` | Google Gemma 4 26B A4B, an open Apache 2.0 MoE model with 3.8B active parameters per token; free tier. |
+
 | `HOST` | No | `127.0.0.1` | Bind address. |
 | `PORT` | No | `8000` | HTTP listening port. |
+
 
 ## API
 
@@ -62,7 +65,7 @@ Success returns exactly the classification contract. Errors return `{"error":"..
 
 ## Validation and AI behavior
 
-The provider receives a compact triage instruction and the raw ticket as a separate user message. OpenRouter strict JSON Schema output is requested, then the application independently validates every field, enum, confidence score, and reasoning length. Invalid output becomes a controlled error and is never repaired by inventing data.
+The provider receives a compact triage instruction and the raw ticket as a separate user message. OpenRouter JSON output mode is requested using the model configured through `OPENROUTER_MODEL`. The application independently validates every field, enum, confidence score, and reasoning length. Invalid output becomes a controlled error and is never repaired by inventing data.
 
 The ticket is treated as untrusted input, and instructions embedded in it must not override the classifier. The prompt asks the model to ignore those instructions. Prompt injection resistance is not a formal security boundary; review classifications before consequential actions.
 
@@ -72,7 +75,7 @@ The ticket is treated as untrusted input, and instructions embedded in it must n
 python -m unittest discover -s tests -v
 ```
 
-The tests cover strict JSON Schema output and independent validation, missing entities, malformed enums, unexpected fields, confidence bounds, reasoning length, missing credentials, input limits, strict OpenRouter JSON Schema request configuration, malformed model output, and provider errors. They do not make live API calls.
+The tests cover JSON output mode and independent schema validation, missing entities, malformed enums, unexpected fields, confidence bounds, reasoning length, missing credentials, input limits, OpenRouter JSON mode request configuration, malformed model output, and provider errors. They do not make live API calls.
 
 ## Privacy and security
 

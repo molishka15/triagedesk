@@ -123,7 +123,9 @@ def classify_ticket(ticket_text: str) -> dict[str, Any]:
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise ClassificationError("Classification is not configured. Set OPENROUTER_API_KEY in the server terminal.")
-    model = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+    model = os.environ.get("OPENROUTER_MODEL", "").strip()
+    if not model:
+        raise ClassificationError("Classification model is not configured. Set OPENROUTER_MODEL in the server environment.")
     payload = {
         "model": model,
         "messages": [
@@ -134,14 +136,7 @@ def classify_ticket(ticket_text: str) -> dict[str, Any]:
         "top_p": 0.95,
         "max_tokens": 500,
         "stream": False,
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "ticket_classification",
-                "strict": True,
-                "schema": RESULT_SCHEMA,
-            },
-        },
+        "response_format": {"type": "json_object"},
         "provider": {"require_parameters": True},
     }
     try:
