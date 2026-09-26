@@ -122,7 +122,7 @@ def classify_ticket(ticket_text: str) -> dict[str, Any]:
         raise ValueError(f"Ticket must be {MAX_TICKET_CHARS:,} characters or fewer.")
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
-        raise ClassificationError("Classification is not configured. Set OPENROUTER_API_KEY in the server terminal.")
+        raise ClassificationError("Classification is not configured. Set OPENROUTER_API_KEY in the server environment.")
     model = os.environ.get("OPENROUTER_MODEL", "").strip()
     if not model:
         raise ClassificationError("Classification model is not configured. Set OPENROUTER_MODEL in the server environment.")

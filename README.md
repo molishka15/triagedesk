@@ -5,7 +5,7 @@ A small support operations workspace that classifies a customer ticket into urge
 ## Features
 
 - Responsive ticket input and scannable classification results.
-- OpenRouter Chat Completions API integration with JSON output mode and independent JSON output mode and independent schema validation.
+- OpenRouter Chat Completions API integration with JSON output mode and independent schema validation.
 - Independent validation of every model result, including enums, exact fields, confidence range, and the 20-word reasoning limit.
 - Input size checks, user-safe provider errors, loading/error states, and no ticket-content logging.
 - No database, account system, browser-side API keys, or retained ticket history.
@@ -40,6 +40,14 @@ Open <http://127.0.0.1:8000>. On macOS/Linux, activate the environment with `sou
 
 Copy `.env.example` as a reference for the required settings. The application intentionally does not read `.env` files; provide configuration through the process environment or your deployment secret manager.
 
+## Deploy to Vercel
+
+This repository includes a Vercel Python Function for `POST /api/classify`; the existing page is served from `src/index.html`. In Vercel, set the project Root Directory to the repository root. Under **Project Settings ? Environment Variables**, add:
+
+- `OPENROUTER_API_KEY`: your OpenRouter key (keep it private; do not commit it to GitHub).
+- `OPENROUTER_MODEL`: `google/gemma-4-26b-a4b-it:free`.
+
+Select **Production** and **Preview** if you use both, save, then redeploy. Vercel applies environment variable changes to new deployments.
 ## Configuration
 
 | Variable | Required | Default | Purpose |
