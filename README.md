@@ -1,101 +1,81 @@
 # Triage Desk
 
-A small support operations workspace that classifies a customer ticket into urgency, category, sentiment, named entities, confidence, and concise reasoning. Tickets are sent to the configured AI provider for analysis and are not persisted by this app.
+A support ticket triage workspace that classifies urgency, category, sentiment, entities, confidence, and concise reasoning. Ticket text is sent to the configured Gemini API for analysis and is not stored by this application.
 
 ## Features
 
-- Responsive ticket input and scannable classification results.
-- OpenRouter Chat Completions API integration with JSON output mode and independent schema validation.
-- Independent validation of every model result, including enums, exact fields, confidence range, and the 20-word reasoning limit.
-- Input size checks, user-safe provider errors, loading/error states, and no ticket-content logging.
-- No database, account system, browser-side API keys, or retained ticket history.
-
-## Architecture
-
-- `src/main.py`: standard-library threaded HTTP server and `/api/classify` endpoint.
-- `src/classifier.py`: provider configuration, classification instructions, schema, request, and independent validation.
-- `src/index.html`: self-contained responsive support-agent UI.
-- `tests/test_classifier.py`: contract and provider behavior tests using mocked HTTP responses.
-
-The web server binds to `127.0.0.1` by default. Run behind a properly configured TLS reverse proxy before exposing it to a network. Authentication and production-grade rate limiting are not included; deploy behind your organization's access controls if shared access is required.
+- Responsive ticket input and classification results.
+- Official Google Gemini API integration with structured JSON output and independent validation.
+- Server-side credentials only; ticket bodies and provider responses are not logged.
+- Local Python server and Vercel Python Function deployments.
 
 ## Requirements
 
 - Python 3.10 or newer
-- An OpenRouter API key with access to the configured model
+- A Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
 
-## Setup and run
+## Run locally
 
-```powershell
+~~~powershell
 cd ticket_classifier
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-$env:OPENROUTER_API_KEY = "your-key"
-$env:OPENROUTER_MODEL = "google/gemma-4-26b-a4b-it:free"
+$env:GEMINI_API_KEY = "your-Google-AI-Studio-key"
+$env:GEMINI_MODEL = "gemini-3.7-flash"
 python -m src.main
-```
+~~~
 
-Open <http://127.0.0.1:8000>. On macOS/Linux, activate the environment with `source .venv/bin/activate` and set the key with `export OPENROUTER_API_KEY="your-key"` and `export OPENROUTER_MODEL="google/gemma-4-26b-a4b-it:free"`.
-
-Copy `.env.example` as a reference for the required settings. The application intentionally does not read `.env` files; provide configuration through the process environment or your deployment secret manager.
+Open http://127.0.0.1:8000. The app reads GEMINI_API_KEY and GEMINI_MODEL from its process environment; it does not load .env files. On macOS/Linux, use export GEMINI_API_KEY="your-key" and export GEMINI_MODEL="gemini-3.7-flash" before starting the server.
 
 ## Deploy to Vercel
 
-This repository includes a Vercel Python Function for `POST /api/classify`; the existing page is served from `src/index.html`. In Vercel, set the project Root Directory to the repository root. Under **Project Settings ? Environment Variables**, add:
+The repository includes a Python Function for POST /api/classify and serves the page from src/index.html. Set Vercel's project Root Directory to the repository root. In **Project Settings > Environment Variables**, add:
 
-- `OPENROUTER_API_KEY`: your OpenRouter key (keep it private; do not commit it to GitHub).
-- `OPENROUTER_MODEL`: `google/gemma-4-26b-a4b-it:free`.
+- GEMINI_API_KEY: your Google AI Studio key. Keep it private; never commit it to GitHub.
+- GEMINI_MODEL: gemini-3.7-flash.
 
-Select **Production** and **Preview** if you use both, save, then redeploy. Vercel applies environment variable changes to new deployments.
+Select Production and Preview as needed, save, then redeploy. Vercel applies environment-variable changes to new deployments. See the [Vercel Python runtime guide](https://vercel.com/docs/functions/runtimes/python) and [environment variable guide](https://vercel.com/docs/environment-variables).
+
 ## Configuration
 
-| Variable | Required | Default | Purpose |
+| Variable | Required | Example | Purpose |
 |---|---:|---|---|
-| `OPENROUTER_API_KEY` | Yes | — | Server-side provider credential. Never put this in frontend code. |
-| `OPENROUTER_MODEL` | Yes | `google/gemma-4-26b-a4b-it:free` in `.env.example` | Google Gemma 4 26B A4B, an open Apache 2.0 MoE model with 3.8B active parameters per token; free tier. |
+| GEMINI_API_KEY | Yes | Set privately in the server environment | Google Gemini API credential. |
+| GEMINI_MODEL | Yes | gemini-3.7-flash | Gemini model ID. Read from the environment; not hard-coded in Python. |
+| HOST | No | 127.0.0.1 | Local server bind address. |
+| PORT | No | 8000 | Local server port. |
 
-| `HOST` | No | `127.0.0.1` | Bind address. |
-| `PORT` | No | `8000` | HTTP listening port. |
-
+.env.example is a reference template only. Copy its settings into the server environment; do not put a real API key in that file or in GitHub.
 
 ## API
 
-`POST /api/classify`
+POST /api/classify
 
 Request:
 
-```json
+~~~json
 {"ticket_text":"Our team cannot access the dashboard."}
-```
+~~~
 
-Success returns exactly the classification contract. Errors return `{"error":"..."}` with a 4xx or 5xx response. Ticket text must be a non-empty string of at most 10,000 characters. The API does not log request bodies or provider response contents.
+Success returns exactly the classification schema. Errors return {"error":"..."}. Ticket text must be a non-empty string of at most 10,000 characters.
 
-## Validation and AI behavior
+## Validation and privacy
 
-The provider receives a compact triage instruction and the raw ticket as a separate user message. OpenRouter JSON output mode is requested using the model configured through `OPENROUTER_MODEL`. The application independently validates every field, enum, confidence score, and reasoning length. Invalid output becomes a controlled error and is never repaired by inventing data.
-
-The ticket is treated as untrusted input, and instructions embedded in it must not override the classifier. The prompt asks the model to ignore those instructions. Prompt injection resistance is not a formal security boundary; review classifications before consequential actions.
+The application requests Gemini structured JSON output using the schema in src/classifier.py, then independently validates the result. Ticket text is treated as untrusted input. The app has no database or ticket history and does not log ticket bodies. Review AI classifications before consequential actions.
 
 ## Tests
 
-```powershell
+~~~powershell
 python -m unittest discover -s tests -v
-```
+~~~
 
-The tests cover JSON output mode and independent schema validation, missing entities, malformed enums, unexpected fields, confidence bounds, reasoning length, missing credentials, input limits, OpenRouter JSON mode request configuration, malformed model output, and provider errors. They do not make live API calls.
-
-## Privacy and security
-
-- Configure credentials only on the server process, preferably through a secrets manager.
-- Ticket text is sent to the configured AI provider for classification; check your organization's provider and data-handling requirements before use.
-- This application does not store tickets. Avoid adding request-body logs, browser persistence, or ticket analytics without an explicit retention policy.
-- The built-in server has no user authentication, durable rate limiting, or TLS. It defaults to loopback for local use. Do not expose it publicly as-is.
-- Provider details, credentials, and stack traces are not returned to users.
+Tests use mocked provider responses and do not make live API calls.
 
 ## Troubleshooting
 
-- **Classification is not configured:** set `OPENROUTER_API_KEY` in the environment where Python runs.
-- **Service is busy:** wait briefly and retry; provider rate limits are surfaced as a safe retry message.
-- **Invalid classification:** retry; the app rejects malformed results rather than displaying unvalidated model data.
-- **Port is in use:** set `PORT` to another available port.
+- **Classification is not configured:** set GEMINI_API_KEY in the environment where the Python server runs.
+- **Model is not configured:** set GEMINI_MODEL=gemini-3.7-flash in the server environment.
+- **Vercel still reports a missing key:** ensure the variable is set in the right Vercel project and deployment environment, then redeploy.
+- **Rate limit:** retry later; the free tier has usage limits.
+- **Port is in use:** set PORT to another available port.

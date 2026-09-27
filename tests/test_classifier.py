@@ -68,12 +68,12 @@ class SchemaTests(unittest.TestCase):
 class ProviderTests(unittest.TestCase):
     @patch.dict(os.environ, {}, clear=True)
     def test_missing_credentials_are_controlled(self):
-        with self.assertRaises(ClassificationError):
+        with self.assertRaisesRegex(ClassificationError, "GEMINI_API_KEY"):
             classify_ticket("Our dashboard is slow.")
 
-    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key"}, clear=True)
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=True)
     def test_missing_model_is_controlled(self):
-        with self.assertRaisesRegex(ClassificationError, "OPENROUTER_MODEL"):
+        with self.assertRaisesRegex(ClassificationError, "GEMINI_MODEL"):
             classify_ticket("Our dashboard is slow.")
 
     def test_input_validation(self):
@@ -84,25 +84,25 @@ class ProviderTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             classify_ticket(None)
 
-    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key", "OPENROUTER_MODEL": "google/gemma-4-26b-a4b-it:free"})
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "GEMINI_MODEL": "gemini-3.7-flash"}, clear=True)
     @patch("src.classifier.requests.post")
-    def test_json_mode_provider_response_is_independently_validated(self, post):
+    def test_gemini_structured_output_request_and_response(self, post):
         response = Mock(ok=True)
-        response.json.return_value = {"choices": [{"message": {"content": json.dumps(result())}}]}
+        response.json.return_value = {"candidates": [{"content": {"parts": [{"text": json.dumps(result())}]}}]}
         post.return_value = response
         self.assertEqual(classify_ticket("The dashboard is slow.")["urgency"], "medium")
-        self.assertEqual(post.call_args.args[0], "https://openrouter.ai/api/v1/chat/completions")
-        self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Bearer test-key")
+        self.assertEqual(post.call_args.args[0], "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent")
+        self.assertEqual(post.call_args.kwargs["headers"]["x-goog-api-key"], "test-key")
         self.assertEqual(post.call_args.kwargs["timeout"], (5, 90))
         payload = post.call_args.kwargs["json"]
-        self.assertEqual(payload["model"], "google/gemma-4-26b-a4b-it:free")
-        self.assertEqual(payload["response_format"]["type"], "json_object")
+        self.assertEqual(payload["generationConfig"]["responseFormat"]["text"]["mimeType"], "application/json")
+        self.assertEqual(payload["generationConfig"]["responseFormat"]["text"]["schema"]["type"], "object")
 
-    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key", "OPENROUTER_MODEL": "google/gemma-4-26b-a4b-it:free"})
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "GEMINI_MODEL": "gemini-3.7-flash"}, clear=True)
     @patch("src.classifier.requests.post")
     def test_invalid_model_result_and_provider_failure_are_safe(self, post):
         response = Mock(ok=True)
-        response.json.return_value = {"choices": [{"message": {"content": '{"urgency":"high"}'}}]}
+        response.json.return_value = {"candidates": [{"content": {"parts": [{"text": '{"urgency":"high"}'}]}}]}
         post.return_value = response
         with self.assertRaisesRegex(ClassificationError, "invalid classification"):
             classify_ticket("Something is broken.")
@@ -111,19 +111,12 @@ class ProviderTests(unittest.TestCase):
         with self.assertRaisesRegex(ClassificationError, "could not process"):
             classify_ticket("Something is broken.")
 
-
-    @patch.dict(os.environ, {"OPENROUTER_API_KEY": "test-key", "OPENROUTER_MODEL": "google/gemma-4-26b-a4b-it:free"})
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key", "GEMINI_MODEL": "gemini-3.7-flash"}, clear=True)
     @patch("src.classifier.requests.post")
-    def test_provider_quota_and_rate_limit_have_distinct_messages(self, post):
-        response = Mock(status_code=429, ok=False)
-        response.json.return_value = {"error": {"type": "insufficient_quota"}}
-        post.return_value = response
-        with self.assertRaisesRegex(ClassificationError, "usage limit"):
+    def test_gemini_rate_limit_has_safe_message(self, post):
+        post.return_value = Mock(status_code=429, ok=False)
+        with self.assertRaisesRegex(RateLimitError, "quota or rate limit"):
             classify_ticket("Our production account is blocked.")
-        response.json.return_value = {"error": {"type": "rate_limit_exceeded"}}
-        with self.assertRaises(RateLimitError):
-            classify_ticket("Our production account is blocked.")
-
 
 if __name__ == "__main__":
     unittest.main()
