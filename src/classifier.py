@@ -155,7 +155,30 @@ def classify_ticket(ticket_text: str) -> dict[str, Any]:
     if response.status_code in (401, 403):
         raise ClassificationError("The Gemini API key is invalid or does not have access to this model.")
     if not response.ok:
-        raise ClassificationError("The Gemini API could not process this ticket. Check the key, model setting, and retry.")
+        provider_code = "unknown"
+        provider_message = ""
+        try:
+            provider_error = response.json().get("error", {})
+            if isinstance(provider_error, dict):
+                provider_code = str(provider_error.get("status") or provider_error.get("code") or "unknown")
+                provider_message = str(provider_error.get("message") or "")
+        except (ValueError, TypeError, AttributeError):
+            pass
+
+        # Provider details help diagnose configuration while keeping credentials and
+        # ticket content out of logs and user-facing errors.
+        safe_detail = provider_message.replace(api_key, "[redacted]").replace(ticket_text, "[ticket redacted]")
+        print(f"Gemini API error HTTP {response.status_code} ({provider_code}): {safe_detail[:400]}", file=sys.stderr)
+        detail_lower = provider_message.lower()
+        if "api_key_invalid" in provider_message.lower() or "api key not valid" in detail_lower:
+            raise ClassificationError("Gemini rejected GEMINI_API_KEY. Create a valid key in Google AI Studio and set it without extra quotes.")
+        if response.status_code == 404:
+            raise ClassificationError("Gemini could not find the configured model. Set GEMINI_MODEL to a model available to your API key.")
+        if response.status_code == 400:
+            raise ClassificationError(f"Gemini rejected the request ({provider_code}). Check the server terminal for the provider detail.")
+        if response.status_code == 402 or "FAILED_PRECONDITION" in provider_code:
+            raise ClassificationError("Gemini requires a billing or project setting for this request. Check the Google AI Studio project configuration.")
+        raise ClassificationError(f"Gemini returned HTTP {response.status_code} ({provider_code}). Check the server terminal for the provider detail.")
     try:
         body = response.json()
         parts = body["candidates"][0]["content"]["parts"]
